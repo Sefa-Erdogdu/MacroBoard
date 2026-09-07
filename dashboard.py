@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import plotly.express as px
 import yfinance as yf
+from streamlit_searchbox import st_searchbox
 
 # API Adresi
 API_BASE_URL = "http://127.0.0.1:8000/api/v1"
@@ -17,7 +18,7 @@ st.set_page_config(
 
 SEKMELER = ["📊 Makro Terminal", "💼 Portföyüm", "🔍 Canlı Varlık Arama & İnceleme", "📄 Ekstre İçe Aktar"]
 
-# 1. BEKLEYEN YÖNLENDİRME VARSA WİDGET EKRANA ÇİZİLMEDEN ÖNCE GÜNCELLE (HATA ÇÖZÜMÜ)
+# BEKLEYEN YÖNLENDİRME VARSA WİDGET EKRANA ÇİZİLMEDEN ÖNCE GÜNCELLE
 if "pending_nav" in st.session_state:
     st.session_state["main_nav_radio"] = st.session_state.pop("pending_nav")
 
@@ -63,13 +64,61 @@ def fetch_ticker_history(symbol: str, period: str):
         return pd.DataFrame()
 
 # ---------------------------------------------------------
+# SEMBOL KATALOĞU (Autocomplete için yerel veritabanı)
+# ---------------------------------------------------------
+SEMBOL_KATALOGU = {
+    "THYAO.IS": "Türk Hava Yolları",
+    "GARAN.IS": "Garanti BBVA",
+    "ASELS.IS": "Aselsan",
+    "EREGL.IS": "Ereğli Demir Çelik",
+    "KCHOL.IS": "Koç Holding",
+    "SASA.IS": "Sasa Polyester",
+    "BIMAS.IS": "BİM Mağazalar",
+    "TUPRS.IS": "Tüpraş",
+    "AKBNK.IS": "Akbank",
+    "SISE.IS": "Şişecam",
+    "ALTIN.S1.IS": "Darphane Altın Sertifikası",
+    "NVDA": "NVIDIA Corporation",
+    "AAPL": "Apple Inc.",
+    "MSFT": "Microsoft Corporation",
+    "TTWO": "Take-Two Interactive",
+    "TSLA": "Tesla Inc.",
+    "AMZN": "Amazon.com",
+    "GOOGL": "Alphabet (Google)",
+    "META": "Meta Platforms",
+    "VOO": "Vanguard S&P 500 ETF",
+    "QQQ": "Invesco QQQ NASDAQ ETF",
+    "MU": "Micron Technology",
+    "BTC-USD": "Bitcoin",
+    "ETH-USD": "Ethereum",
+    "AFA": "Ak Portföy Amerika Yabancı Hisse Fonu",
+    "PBR": "Pusula Portföy Birinci Fon",
+    "PHE": "Pusula Portföy Hisse Senedi Fonu",
+    "TP2": "Tera Portföy Para Piyasası Fonu",
+    "THF": "TEB Portföy Para Piyasası Fonu",
+    "TMG": "İş Portföy Yabancı Hisse Senedi Fonu",
+    "TLY": "TEB Portföy Yabancı Hisse Fonu",
+    "EKF": "Fiba Portföy Katılım Fonu",
+}
+
+def search_symbols(query: str):
+    if not query:
+        return []
+    q = query.strip().upper()
+    results = []
+    for sym, name in SEMBOL_KATALOGU.items():
+        if q in sym.upper() or q in name.upper():
+            label = f"{sym} — {name}"
+            results.append((label, sym))
+    results.sort(key=lambda x: (not x[1].upper().startswith(q), x[1]))
+    return results[:10]
+
+# ---------------------------------------------------------
 # ÖZEL TERMINAL CSS STİLLERİ
 # ---------------------------------------------------------
 st.markdown("""
 <style>
     .stApp { background-color: #0c0f14; }
-    
-    /* Navigasyon Barı Stili */
     div[data-testid="stRadio"] > div {
         flex-direction: row;
         gap: 12px;
@@ -88,8 +137,6 @@ st.markdown("""
         border-color: #58a6ff !important;
         color: #f0f6fc !important;
     }
-
-    /* Metrik Kartı */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #161b22, #0d1117);
         border: 1px solid #30363d;
@@ -104,7 +151,6 @@ st.markdown("""
 
 st.title("📈 MacroBoard Terminal")
 
-# NAVİGASYON WIDGETI
 st.radio(
     "Navigasyon Barı",
     SEKMELER,
@@ -127,12 +173,12 @@ if st.session_state["main_nav_radio"] == SEKMELER[0]:
         sym = item["symbol"]
         price = item["price"]
         chg = item["change"]
-        
+
         with cols[col_idx % 4]:
             st.metric(label=name, value=f"{price:,.2f}", delta=f"{chg:+.2f}%")
             if st.button("📊 Grafiği İncele", key=f"btn_m_{sym}", width="stretch"):
                 st.session_state["active_ticker"] = sym
-                st.session_state["pending_nav"] = SEKMELER[2]  # Güvenli Yönlendirme
+                st.session_state["pending_nav"] = SEKMELER[2]
                 st.rerun()
         col_idx += 1
 
@@ -149,13 +195,13 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
         port_res = requests.get(f"{API_BASE_URL}/portfolio/summary")
         if port_res.status_code == 200:
             data = port_res.json()
-            
+
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Toplam Değer", f"{data['total_portfolio_value_try']:,.2f} ₺")
             m2.metric("Toplam Maliyet", f"{data['total_portfolio_cost_try']:,.2f} ₺")
             m3.metric(
-                "Net Kâr / Zarar", 
-                f"{data['total_profit_loss_try']:,.2f} ₺", 
+                "Net Kâr / Zarar",
+                f"{data['total_profit_loss_try']:,.2f} ₺",
                 delta=f"{data['total_profit_loss_percent']}%"
             )
             m4.metric("Dolar / TL Kuru", f"{data['usd_try_rate']:.2f} ₺")
@@ -169,14 +215,14 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
                 with col_chart:
                     st.markdown("### Varlık Ağırlıkları")
                     fig = px.pie(
-                        df, 
-                        names='symbol', 
+                        df,
+                        names='symbol',
                         values='value_try',
                         hole=0.6,
                         color_discrete_sequence=["#2b5c8f", "#d97724", "#258257", "#b83b3b", "#7b52ab", "#00a896"]
                     )
                     fig.update_traces(
-                        textposition='outside', 
+                        textposition='outside',
                         textinfo='percent+label',
                         marker=dict(line=dict(color='#0c0f14', width=2))
                     )
@@ -192,11 +238,11 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
                 with col_table:
                     st.markdown("### Varlık Detayları")
                     display_df = df[[
-                        "symbol", "asset_type", "amount", "avg_cost", 
+                        "symbol", "asset_type", "amount", "avg_cost",
                         "currency", "current_price", "value_try", "profit_loss_try", "profit_loss_percent"
                     ]].copy()
                     display_df.columns = [
-                        "Sembol", "Tip", "Miktar", "Ort. Maliyet", 
+                        "Sembol", "Tip", "Miktar", "Ort. Maliyet",
                         "Para Birimi", "Anlık Fiyat", "Değer (₺)", "Kâr/Zarar (₺)", "Kâr/Zarar (%)"
                     ]
                     st.dataframe(display_df, width="stretch", hide_index=True)
@@ -207,19 +253,18 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
                         sym_code = item["symbol"]
                         if port_btns[idx].button(f"🔍 {sym_code}", key=f"btn_p_{sym_code}_{item['id']}", width="stretch"):
                             st.session_state["active_ticker"] = sym_code
-                            st.session_state["pending_nav"] = SEKMELER[2]  # Güvenli Yönlendirme
+                            st.session_state["pending_nav"] = SEKMELER[2]
                             st.rerun()
 
                 st.divider()
 
-                # SAYFA İÇİ SİLME ALANI
                 st.markdown("### 🗑️ Varlık Yönetimi & Silme")
                 col_del_select, col_del_btn = st.columns([3, 1])
-                
+
                 with col_del_select:
                     item_options = {f"{item['symbol']} — Adet: {item['amount']} (ID: {item['id']})": item['id'] for item in items}
                     selected_del_option = st.selectbox("Silmek İstediğiniz Varlığı Seçin", list(item_options.keys()))
-                
+
                 with col_del_btn:
                     st.write("")
                     st.write("")
@@ -237,29 +282,25 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
         st.error(f"Portföy verileri yüklenirken hata oluştu: {e}")
 
 # =========================================================
-# 3. SEKME: SINIRSIZ SERBEST ARAMA ENGINE
+# 3. SEKME: SINIRSIZ SERBEST ARAMA ENGINE (AUTOCOMPLETE)
 # =========================================================
 elif st.session_state["main_nav_radio"] == SEKMELER[2]:
     st.subheader("🔎 Sınırsız Canlı Varlık Arama Engine")
     st.caption("İstediğiniz TÜM küresel hisseleri (PLAG, TTWO, AAPL, NVDA), BİST hisselerini (THYAO.IS), Kripto veya TEFAS fonlarını doğrudan yazabilirsiniz.")
 
-    col_search_input, col_search_btn = st.columns([4, 1])
-    
-    with col_search_input:
-        user_input = st.text_input(
-            "Sembol / Varlık Adı Yazın (Örn: PLAG, TTWO, THYAO.IS, AAPL, BTC-USD, AFA)",
-            value=st.session_state["active_ticker"],
-            key="search_input_field"
-        ).strip().upper()
-    
-    with col_search_btn:
-        st.write("")
-        st.write("")
-        search_clicked = st.button("Piyasada Ara", type="primary", width="stretch")
+    st.write("**Sembol / Varlık Adı Yazın** (yazdıkça öneriler düşer, listede yoksa da direkt sembol girip Enter'a basabilirsin):")
+    selected_symbol = st_searchbox(
+        search_symbols,
+        placeholder="Örn: T yazınca TTWO, TP2, THYAO.IS gibi eşleşenler çıkar...",
+        key="asset_searchbox",
+        default=st.session_state["active_ticker"]
+    )
 
-    if user_input and user_input != st.session_state["active_ticker"]:
-        st.session_state["active_ticker"] = user_input
-        st.rerun()
+    if selected_symbol:
+        user_input = selected_symbol.strip().upper()
+        if user_input != st.session_state["active_ticker"]:
+            st.session_state["active_ticker"] = user_input
+            st.rerun()
 
     active_symbol = st.session_state["active_ticker"]
 
@@ -269,7 +310,6 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
         currency = "USD"
         info_name = active_symbol
 
-        # TEFAS Fon Kontrolü
         if len(active_symbol) == 3 and not active_symbol.endswith(".IS"):
             try:
                 tf_res = requests.get(f"{API_BASE_URL}/fund/{active_symbol}")
@@ -282,7 +322,6 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
             except Exception:
                 pass
 
-        # Standart Piyasa Kontrolü (yfinance)
         if asset_type == "STOCK":
             try:
                 if active_symbol in ["ALTIN.S1.IS", "ALTIN.S1"]:
@@ -296,7 +335,7 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                     t = yf.Ticker(active_symbol)
                     live_price = round(t.fast_info.get("lastPrice", 0.0), 2)
                     currency = "TRY" if active_symbol.endswith(".IS") else t.fast_info.get("currency", "USD")
-                    
+
                     try:
                         long_name = t.info.get("longName")
                         if long_name:
@@ -314,11 +353,10 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
             k2.metric("Varlık Tipi", asset_type)
             k3.metric("Para Birimi", currency)
 
-            # GRAFİK PERİYOT SEÇİMİ (1A, 3A, 6A, 1Y, 3Y, 5Y)
             if asset_type == "STOCK":
                 st.markdown("### 📉 Tarihsel Fiyat Performansı")
                 tf_map = {"1 Ay": "1mo", "3 Ay": "3mo", "6 Ay": "6mo", "1 Yıl": "1y", "3 Yıl": "3y", "5 Yıl": "5y"}
-                
+
                 tf_cols = st.columns(len(tf_map))
                 for idx, (label, period_val) in enumerate(tf_map.items()):
                     if tf_cols[idx].button(label, key=f"tf_{period_val}", width="stretch"):
@@ -330,12 +368,12 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
 
                 if not hist.empty:
                     fig_area = px.area(
-                        hist, x=hist.index, y="Close", 
+                        hist, x=hist.index, y="Close",
                         color_discrete_sequence=["#58a6ff"],
                         title=f"{active_symbol} — Periyot: {selected_period.upper()}"
                     )
                     fig_area.update_layout(
-                        template="plotly_dark", 
+                        template="plotly_dark",
                         paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         xaxis_title="", yaxis_title=f"Fiyat ({currency})"
@@ -344,7 +382,6 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
 
             st.divider()
 
-            # PORTFÖYE EKLEME FORMU
             st.markdown(f"### ➕ {active_symbol} Varlığını Portföye Ekle")
             with st.form("add_asset_direct_form"):
                 ca, cb = st.columns(2)
@@ -352,7 +389,7 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                     add_amount = st.number_input("Adet / Miktar", min_value=0.0001, step=1.0, value=10.0)
                 with cb:
                     add_cost = st.number_input(f"Ortalama Alış Maliyeti ({currency})", min_value=0.0001, step=0.1, value=float(live_price))
-                
+
                 btn_add = st.form_submit_button("Portföyüme Ekle", width="stretch")
 
                 if btn_add:
@@ -366,7 +403,7 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                         res = requests.post(f"{API_BASE_URL}/portfolio/add", json=payload)
                         if res.status_code == 200:
                             st.success(f"{active_symbol} portföye eklendi!")
-                            st.session_state["pending_nav"] = SEKMELER[1]  # Portföye Güvenli Dönüş
+                            st.session_state["pending_nav"] = SEKMELER[1]
                             st.rerun()
                         else:
                             st.error("Ekleme başarısız.")
@@ -401,7 +438,6 @@ elif st.session_state["main_nav_radio"] == SEKMELER[3]:
         st.divider()
         st.markdown("### 🔎 Bulunan Varlıklar — Onaylamadan Önce Kontrol Edin")
 
-        # Mevcut portföydeki sembolleri çek (çakışma uyarısı için)
         existing_symbols = set()
         try:
             existing_res = requests.get(f"{API_BASE_URL}/portfolio/summary")
