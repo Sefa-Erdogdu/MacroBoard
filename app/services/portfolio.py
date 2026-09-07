@@ -18,6 +18,35 @@ class PortfolioService:
         return item
 
     @staticmethod
+    def add_or_merge_item(db: Session, symbol: str, asset_type: str, amount: float, avg_cost: float):
+        symbol = symbol.upper()
+        asset_type = asset_type.upper()
+
+        existing = db.query(PortfolioItem).filter(
+            PortfolioItem.symbol == symbol,
+            PortfolioItem.asset_type == asset_type
+        ).first()
+
+        if existing:
+            # Ağırlıklı ortalama maliyet hesapla
+            existing_total_cost = existing.amount * existing.avg_cost
+            new_total_cost = amount * avg_cost
+            merged_amount = existing.amount + amount
+
+            if merged_amount > 0:
+                merged_avg_cost = (existing_total_cost + new_total_cost) / merged_amount
+            else:
+                merged_avg_cost = avg_cost
+
+            existing.amount = merged_amount
+            existing.avg_cost = merged_avg_cost
+            db.commit()
+            db.refresh(existing)
+            return existing
+        else:
+            return PortfolioService.add_item(db, symbol, asset_type, amount, avg_cost)
+
+    @staticmethod
     def get_summary(db: Session):
         items = db.query(PortfolioItem).all()
         

@@ -413,7 +413,7 @@ elif st.session_state["main_nav_radio"] == SEKMELER[3]:
         preview_df = pd.DataFrame(st.session_state["import_preview"])
         preview_df.insert(0, "İçe Aktar", True)
         preview_df["Zaten Portföyde mi?"] = preview_df["symbol"].apply(
-            lambda s: "⚠️ Evet — eklenirse ayrı satır olarak eklenir" if s in existing_symbols else "Yeni"
+            lambda s: "🔄 Mevcut — ağırlıklı ortalama ile birleştirilecek" if s in existing_symbols else "Yeni"
         )
         preview_df.columns = ["İçe Aktar", "Sembol", "Adet", "Ort. Maliyet", "Tip", "Durum"]
 

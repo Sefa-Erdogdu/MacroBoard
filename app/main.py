@@ -49,7 +49,7 @@ def get_macro_overview():
 
 @app.post("/api/v1/portfolio/add")
 def add_portfolio_item(asset: AddAssetSchema, db: Session = Depends(get_db)):
-    return PortfolioService.add_item(db, asset.symbol, asset.asset_type, asset.amount, asset.avg_cost)
+    return PortfolioService.add_or_merge_item(db, asset.symbol, asset.asset_type, asset.amount, asset.avg_cost)
 
 @app.get("/api/v1/portfolio/summary")
 def get_portfolio_summary(db: Session = Depends(get_db)):
@@ -75,6 +75,6 @@ async def import_pdf_preview(file: UploadFile = File(...)):
 def import_pdf_confirm(items: list[AddAssetSchema], db: Session = Depends(get_db)):
     added = []
     for asset in items:
-        item = PortfolioService.add_item(db, asset.symbol, asset.asset_type, asset.amount, asset.avg_cost)
+        item = PortfolioService.add_or_merge_item(db, asset.symbol, asset.asset_type, asset.amount, asset.avg_cost)
         added.append(item.symbol)
     return {"status": "success", "added": added, "count": len(added)}
