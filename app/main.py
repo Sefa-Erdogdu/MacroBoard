@@ -75,6 +75,6 @@ async def import_pdf_preview(file: UploadFile = File(...)):
 def import_pdf_confirm(items: list[AddAssetSchema], db: Session = Depends(get_db)):
     added = []
     for asset in items:
-        item = PortfolioService.add_or_merge_item(db, asset.symbol, asset.asset_type, asset.amount, asset.avg_cost)
+        item = PortfolioService.add_or_replace_item(db, asset.symbol, asset.asset_type, asset.amount, asset.avg_cost)
         added.append(item.symbol)
     return {"status": "success", "added": added, "count": len(added)}

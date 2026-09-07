@@ -47,6 +47,30 @@ class PortfolioService:
             return PortfolioService.add_item(db, symbol, asset_type, amount, avg_cost)
 
     @staticmethod
+    def add_or_replace_item(db: Session, symbol: str, asset_type: str, amount: float, avg_cost: float):
+        """
+        PDF ekstre importu için: aynı sembol zaten varsa değerlerin ÜZERİNE YAZAR
+        (ağırlıklı ortalama İLE BİRLEŞTİRMEZ). Çünkü PDF'teki 'Portföy Özeti'
+        zaten o anki nihai bakiyedir, bir alım hareketi değildir.
+        """
+        symbol = symbol.upper()
+        asset_type = asset_type.upper()
+
+        existing = db.query(PortfolioItem).filter(
+            PortfolioItem.symbol == symbol,
+            PortfolioItem.asset_type == asset_type
+        ).first()
+
+        if existing:
+            existing.amount = amount
+            existing.avg_cost = avg_cost
+            db.commit()
+            db.refresh(existing)
+            return existing
+        else:
+            return PortfolioService.add_item(db, symbol, asset_type, amount, avg_cost)
+
+    @staticmethod
     def get_summary(db: Session):
         items = db.query(PortfolioItem).all()
         
