@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.express as px
 import yfinance as yf
 from streamlit_searchbox import st_searchbox
+import plotly.graph_objects as go
 
 # API Adresi
 API_BASE_URL = "http://127.0.0.1:8000/api/v1"
@@ -15,6 +16,22 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+@st.dialog("Varlığı Silmek İstediğinize Emin Misiniz?")
+def confirm_delete_dialog(delete_id, symbol_label):
+    st.write(f"**{symbol_label}** varlığını portföyden kalıcı olarak silmek üzeresiniz. Bu işlem geri alınamaz.")
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("Evet, Sil", type="primary", width="stretch"):
+            del_res = requests.delete(f"{API_BASE_URL}/portfolio/delete/{delete_id}")
+            if del_res.status_code == 200:
+                st.success("Varlık silindi!")
+                st.rerun()
+            else:
+                st.error("Silme başarısız.")
+    with col_no:
+        if st.button("Vazgeç", width="stretch"):
+            st.rerun()
 
 SEKMELER = ["📊 Makro Terminal", "💼 Portföyüm", "🔍 Canlı Varlık Arama & İnceleme", "📄 Ekstre İçe Aktar"]
 
@@ -270,12 +287,7 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
                     st.write("")
                     if st.button("Varlığı Portföyden Sil", type="primary", width="stretch"):
                         delete_id = item_options[selected_del_option]
-                        del_res = requests.delete(f"{API_BASE_URL}/portfolio/delete/{delete_id}")
-                        if del_res.status_code == 200:
-                            st.success("Varlık silindi!")
-                            st.rerun()
-                        else:
-                            st.error("Silme başarısız.")
+                        confirm_delete_dialog(delete_id, selected_del_option)
             else:
                 st.info("Portföyünüzde varlık bulunmuyor. 'Canlı Varlık Arama' sekmesinden ekleyebilirsiniz.")
     except Exception as e:
@@ -359,7 +371,9 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
 
                 tf_cols = st.columns(len(tf_map))
                 for idx, (label, period_val) in enumerate(tf_map.items()):
-                    if tf_cols[idx].button(label, key=f"tf_{period_val}", width="stretch"):
+                    is_active = (period_val == st.session_state["timeframe"])
+                    btn_type = "primary" if is_active else "secondary"
+                    if tf_cols[idx].button(label, key=f"tf_{period_val}", width="stretch", type=btn_type):
                         st.session_state["timeframe"] = period_val
                         st.rerun()
 
@@ -367,48 +381,96 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                 hist = fetch_ticker_history(active_symbol, selected_period)
 
                 if not hist.empty:
-                    fig_area = px.area(
-                        hist, x=hist.index, y="Close",
-                        color_discrete_sequence=["#58a6ff"],
-                        title=f"{active_symbol} — Periyot: {selected_period.upper()}"
+                    chart_type = st.radio(
+                        "Grafik Tipi", ["Çizgi", "Mum (Candlestick)"],
+                        horizontal=True, key="chart_type_radio", label_visibility="collapsed"
                     )
-                    fig_area.update_layout(
+
+                    if chart_type == "Mum (Candlestick)":
+                        fig = go.Figure(data=[go.Candlestick(
+                            x=hist.index, open=hist["Open"], high=hist["High"],
+                            low=hist["Low"], close=hist["Close"],
+                            increasing_line_color="#2ecc71", decreasing_line_color="#e74c3c"
+                        )])
+                        fig.update_layout(xaxis_rangeslider_visible=False)
+                    else:
+                        fig = px.area(hist, x=hist.index, y="Close", color_discrete_sequence=["#58a6ff"])
+                        fig.update_traces(line=dict(width=2))
+
+                    fig.update_layout(
                         template="plotly_dark",
                         paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
-                        xaxis_title="", yaxis_title=f"Fiyat ({currency})"
+                        title=f"{active_symbol} — Periyot: {selected_period.upper()}",
+                        xaxis_title="", yaxis_title=f"Fiyat ({currency})",
+                        font=dict(color="#c9d1d9"),
+                        hovermode="x unified",
+                        margin=dict(l=10, r=10, t=40, b=10)
                     )
-                    st.plotly_chart(fig_area, width="stretch")
+                    fig.update_xaxes(showgrid=True, gridcolor="#21262d")
+                    fig.update_yaxes(showgrid=True, gridcolor="#21262d")
+                    st.plotly_chart(fig, width="stretch")
 
             st.divider()
 
+            # Varlık tipine göre miktar giriş adımını otomatik ayarla
+            if active_symbol in ["BTC-USD", "ETH-USD"]:
+                amount_step = 0.001
+                default_amount = 0.01
+            else:
+                amount_step = 1.0
+                default_amount = 100.0 if asset_type == "FUND" else 10.0
+
+            amount_key = f"amt_{active_symbol}"
+            cost_key = f"cost_{active_symbol}"
+
+            if amount_key not in st.session_state:
+                st.session_state[amount_key] = default_amount
+            if cost_key not in st.session_state:
+                st.session_state[cost_key] = float(live_price)
+
             st.markdown(f"### ➕ {active_symbol} Varlığını Portföye Ekle")
-            with st.form("add_asset_direct_form"):
-                ca, cb = st.columns(2)
-                with ca:
-                    add_amount = st.number_input("Adet / Miktar", min_value=0.0001, step=1.0, value=10.0)
-                with cb:
-                    add_cost = st.number_input(f"Ortalama Alış Maliyeti ({currency})", min_value=0.0001, step=0.1, value=float(live_price))
 
-                btn_add = st.form_submit_button("Portföyüme Ekle", width="stretch")
+            ca, cb = st.columns(2)
+            with ca:
+                st.caption("Adet / Miktar")
+                a1, a2, a3 = st.columns([1, 3, 1])
+                if a1.button("➖", key=f"dec_amt_{active_symbol}", width="stretch"):
+                    st.session_state[amount_key] = max(0.0001, round(st.session_state[amount_key] - amount_step, 6))
+                    st.rerun()
+                a2.number_input("Adet / Miktar", min_value=0.0001, step=amount_step, key=amount_key, label_visibility="collapsed")
+                if a3.button("➕", key=f"inc_amt_{active_symbol}", width="stretch"):
+                    st.session_state[amount_key] = round(st.session_state[amount_key] + amount_step, 6)
+                    st.rerun()
 
-                if btn_add:
-                    payload = {
-                        "symbol": active_symbol,
-                        "asset_type": asset_type,
-                        "amount": add_amount,
-                        "avg_cost": add_cost
-                    }
-                    try:
-                        res = requests.post(f"{API_BASE_URL}/portfolio/add", json=payload)
-                        if res.status_code == 200:
-                            st.success(f"{active_symbol} portföye eklendi!")
-                            st.session_state["pending_nav"] = SEKMELER[1]
-                            st.rerun()
-                        else:
-                            st.error("Ekleme başarısız.")
-                    except Exception as e:
-                        st.error(f"Bağlantı Hatası: {e}")
+            with cb:
+                st.caption(f"Ortalama Alış Maliyeti ({currency})")
+                c1, c2, c3 = st.columns([1, 3, 1])
+                if c1.button("➖", key=f"dec_cost_{active_symbol}", width="stretch"):
+                    st.session_state[cost_key] = max(0.0001, round(st.session_state[cost_key] - 0.1, 4))
+                    st.rerun()
+                c2.number_input(f"Ortalama Alış Maliyeti ({currency})", min_value=0.0001, step=0.1, key=cost_key, label_visibility="collapsed")
+                if c3.button("➕", key=f"inc_cost_{active_symbol}", width="stretch"):
+                    st.session_state[cost_key] = round(st.session_state[cost_key] + 0.1, 4)
+                    st.rerun()
+
+            if st.button("Portföyüme Ekle", type="primary", width="stretch"):
+                payload = {
+                    "symbol": active_symbol,
+                    "asset_type": asset_type,
+                    "amount": st.session_state[amount_key],
+                    "avg_cost": st.session_state[cost_key]
+                }
+                try:
+                    res = requests.post(f"{API_BASE_URL}/portfolio/add", json=payload)
+                    if res.status_code == 200:
+                        st.success(f"{active_symbol} portföye eklendi!")
+                        st.session_state["pending_nav"] = SEKMELER[1]
+                        st.rerun()
+                    else:
+                        st.error("Ekleme başarısız.")
+                except Exception as e:
+                    st.error(f"Bağlantı Hatası: {e}")
         else:
             st.error(f"'{active_symbol}' sembolü küresel piyasalarda bulunamadı. Lütfen geçerli bir kod girin (Örn: PLAG, TTWO, THYAO.IS, AAPL, BTC-USD).")
 
