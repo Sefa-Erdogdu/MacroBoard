@@ -381,12 +381,20 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                 hist = fetch_ticker_history(active_symbol, selected_period)
 
                 if not hist.empty:
-                    chart_type = st.radio(
-                        "Grafik Tipi", ["Çizgi", "Mum (Candlestick)"],
+                    if "chart_display_type" not in st.session_state:
+                        st.session_state["chart_display_type"] = "Çizgi"
+
+                    chart_options = ["Çizgi", "Mum (Candlestick)"]
+                    current_index = chart_options.index(st.session_state["chart_display_type"])
+
+                    chosen_type = st.radio(
+                        "Grafik Tipi", chart_options,
+                        index=current_index,
                         horizontal=True, key="chart_type_radio", label_visibility="collapsed"
                     )
+                    st.session_state["chart_display_type"] = chosen_type
 
-                    if chart_type == "Mum (Candlestick)":
+                    if chosen_type == "Mum (Candlestick)":
                         fig = go.Figure(data=[go.Candlestick(
                             x=hist.index, open=hist["Open"], high=hist["High"],
                             low=hist["Low"], close=hist["Close"],
@@ -394,7 +402,7 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                         )])
                         fig.update_layout(xaxis_rangeslider_visible=False)
                     else:
-                        fig = px.area(hist, x=hist.index, y="Close", color_discrete_sequence=["#58a6ff"])
+                        fig = px.line(hist, x=hist.index, y="Close", color_discrete_sequence=["#58a6ff"])
                         fig.update_traces(line=dict(width=2))
 
                     fig.update_layout(
