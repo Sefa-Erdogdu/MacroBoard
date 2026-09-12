@@ -36,13 +36,13 @@
 ![Makro Terminal](screenshots/makro-terminal.png)
 
 ### Portföyüm
-![Portföyüm](screenshots/portfoyum.png)
+![Portföyüm](screenshots/portfoy.png)
 
 ### Canlı Varlık Arama
 ![Canlı Arama](screenshots/arama.png)
 
 ### Ekstre İçe Aktarma (PDF)
-![Ekstre İçe Aktar](screenshots/ekstre-ice-aktar.png)
+![Ekstre İçe Aktar](screenshots/ekstre.png)
 
 
 
