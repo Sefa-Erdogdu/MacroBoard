@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.models import PortfolioItem
 from app.services.market import MarketService
 from app.services.tefas import TefasService
+from concurrent.futures import ThreadPoolExecutor
 
 class PortfolioService:
     @staticmethod
@@ -73,10 +74,29 @@ class PortfolioService:
     @staticmethod
     def get_summary(db: Session):
         items = db.query(PortfolioItem).all()
-        
-        # Anlık Dolar/TL kurunu çekiyoruz
+
         usd_quote = MarketService.get_symbol_quote("TRY=X")
         usd_try_rate = usd_quote.get("price", 1.0) if "error" not in usd_quote else 1.0
+
+        stock_symbols = [i.symbol for i in items if
+                         i.asset_type == "STOCK" and i.symbol not in ["ALTIN.S1.IS", "ALTIN.S1"]]
+        fund_symbols = [i.symbol for i in items if i.asset_type == "FUND"]
+        has_gold = any(i.symbol in ["ALTIN.S1.IS", "ALTIN.S1"] for i in items if i.asset_type == "STOCK")
+
+        # Hisse/ETF fiyatlarını TEK toplu (paralel) istekte çek
+        stock_quotes = MarketService.get_batch_quotes(stock_symbols) if stock_symbols else {}
+
+        # TEFAS fonlarını paralel thread'lerle çek (kütüphane gerçek toplu endpoint sunmuyor)
+        fund_quotes = {}
+        if fund_symbols:
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                fund_results = list(executor.map(TefasService.get_fund_quote, fund_symbols))
+                for sym, res in zip(fund_symbols, fund_results):
+                    if "error" not in res:
+                        fund_quotes[sym] = res
+
+        # Altın sertifikası: portföyde kaç tane olursa olsun sadece 1 kez hesapla
+        gold_quote = MarketService.get_symbol_quote("ALTIN.S1.IS") if has_gold else None
 
         result = []
         total_value_try = 0.0
@@ -87,30 +107,30 @@ class PortfolioService:
             currency = "TRY"
 
             if item.asset_type == "STOCK":
-                quote = MarketService.get_symbol_quote(item.symbol)
-                current_price = quote.get("price", 0.0)
-                if item.symbol.endswith(".IS"):
+                if item.symbol in ["ALTIN.S1.IS", "ALTIN.S1"]:
+                    if gold_quote and "error" not in gold_quote:
+                        current_price = gold_quote.get("price", 0.0)
                     currency = "TRY"
                 else:
-                    currency = quote.get("currency", "USD")
+                    q = stock_quotes.get(item.symbol)
+                    if q:
+                        current_price = q["price"]
+                        currency = q["currency"]
             elif item.asset_type == "FUND":
-                quote = TefasService.get_fund_quote(item.symbol)
-                current_price = quote.get("price", 0.0)
+                q = fund_quotes.get(item.symbol)
+                if q:
+                    current_price = q.get("price", 0.0)
                 currency = "TRY"
 
-            # Fiyat çekilemezse (0 kalırsa) maliyet fiyatını baz alarak portföyü koru
             if current_price == 0.0:
                 current_price = item.avg_cost
 
-            # Dolar cinsinden varlıkları güncel Dolar/TL kuruyla çarpıyoruz
             fx_rate = usd_try_rate if currency == "USD" else 1.0
-            
-            # Değer ve Maliyet Hesaplamaları (TL Bazında)
             value_in_try = round(current_price * item.amount * fx_rate, 2)
             cost_in_try = round(item.avg_cost * item.amount * fx_rate, 2)
-            
             profit_loss_try = round(value_in_try - cost_in_try, 2)
-            profit_loss_percent = round(((value_in_try - cost_in_try) / cost_in_try) * 100, 2) if cost_in_try > 0 else 0.0
+            profit_loss_percent = round(((value_in_try - cost_in_try) / cost_in_try) * 100,
+                                        2) if cost_in_try > 0 else 0.0
 
             total_value_try += value_in_try
             total_cost_try += cost_in_try
@@ -130,7 +150,8 @@ class PortfolioService:
             })
 
         total_profit_loss_try = round(total_value_try - total_cost_try, 2)
-        total_profit_loss_percent = round(((total_value_try - total_cost_try) / total_cost_try) * 100, 2) if total_cost_try > 0 else 0.0
+        total_profit_loss_percent = round(((total_value_try - total_cost_try) / total_cost_try) * 100,
+                                          2) if total_cost_try > 0 else 0.0
 
         return {
             "usd_try_rate": usd_try_rate,
