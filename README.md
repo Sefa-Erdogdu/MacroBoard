@@ -30,6 +30,20 @@
 
 \* İnteraktif arama ve çoklu zaman aralığı (1A-5Y) grafikleri
 
+## 📸 Ekran Görüntüleri
+
+### Makro Terminal
+![Makro Terminal](screenshots/makro-terminal.png)
+
+### Portföyüm
+![Portföyüm](screenshots/portfoyum.png)
+
+### Canlı Varlık Arama
+![Canlı Arama](screenshots/arama.png)
+
+### Ekstre İçe Aktarma (PDF)
+![Ekstre İçe Aktar](screenshots/ekstre-ice-aktar.png)
+
 
 
 \## 🚀 Kurulum
