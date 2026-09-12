@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.services.pdf_import import PdfImportService
 from fastapi import UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, get_db
 from app.services.market import MarketService
@@ -17,6 +18,13 @@ app = FastAPI(
     title="MacroBoard API",
     version="0.1.0",
     description="Finansal ve Makroekonomik Veri Terminali API"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 class AddAssetSchema(BaseModel):

@@ -1,9 +1,7 @@
-\# 📈 MacroBoard - Finansal \& Makro Veri Terminali
+# 📈 MacroBoard - Finansal & Makro Veri Terminali
 
-
-
-MacroBoard; küresel/yerel hisse senetleri (BİST, US), TEFAS yatırım fonları ve makroekonomik göstergeleri tek bir çatı altında birleştiren, canlı portföy ve Kâr/Zarar (P/L) analitiği sunan full-stack bir finansal veri terminalidir.
-
+🔗 **[Canlı Demo](https://macroboard.streamlit.app)** — tarayıcıdan doğrudan deneyebilirsiniz.
+*(İlk açılışta backend "uyanma" süresi nedeniyle 30-50 saniye gecikme olabilir.)*
 
 
 \## 🏗️ Mimari ve Teknolojiler

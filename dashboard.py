@@ -7,7 +7,7 @@ from streamlit_searchbox import st_searchbox
 import plotly.graph_objects as go
 
 # API Adresi
-API_BASE_URL = "http://127.0.0.1:8000/api/v1"
+API_BASE_URL = "https://macroboard-api-7btq.onrender.com/api/v1"
 
 # Sayfa Yapılandırması
 st.set_page_config(
