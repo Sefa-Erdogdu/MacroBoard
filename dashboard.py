@@ -213,7 +213,7 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
         if port_res.status_code == 200:
             data = port_res.json()
 
-            m1, m2, m3, m4 = st.columns(4)
+            m1, m2, m3, m4, m5 = st.columns(5)
             m1.metric("Toplam Değer", f"{data['total_portfolio_value_try']:,.2f} ₺")
             m2.metric("Toplam Maliyet", f"{data['total_portfolio_cost_try']:,.2f} ₺")
             m3.metric(
@@ -222,6 +222,11 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
                 delta=f"{data['total_profit_loss_percent']}%"
             )
             m4.metric("Dolar / TL Kuru", f"{data['usd_try_rate']:.2f} ₺")
+            m5.metric(
+                "Portföy Volatilitesi",
+                f"%{data.get('portfolio_volatility_percent', 0):.2f}",
+                help="Yıllıklandırılmış, ağırlıklı ortalama volatilite. Basitleştirilmiş bir tahmindir — varlıklar arası korelasyonu hesaba katmaz."
+            )
 
             st.write("")
             items = data.get("items", [])
@@ -256,11 +261,12 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
                     st.markdown("### Varlık Detayları")
                     display_df = df[[
                         "symbol", "asset_type", "amount", "avg_cost",
-                        "currency", "current_price", "value_try", "profit_loss_try", "profit_loss_percent"
+                        "currency", "current_price", "value_try", "profit_loss_try", "profit_loss_percent",
+                        "volatility_percent"
                     ]].copy()
                     display_df.columns = [
                         "Sembol", "Tip", "Miktar", "Ort. Maliyet",
-                        "Para Birimi", "Anlık Fiyat", "Değer (₺)", "Kâr/Zarar (₺)", "Kâr/Zarar (%)"
+                        "Para Birimi", "Anlık Fiyat", "Değer (₺)", "Kâr/Zarar (₺)", "Kâr/Zarar (%)", "Volatilite (%)"
                     ]
                     st.dataframe(display_df, width="stretch", hide_index=True)
 

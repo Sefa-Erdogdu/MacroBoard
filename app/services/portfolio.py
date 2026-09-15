@@ -95,6 +95,16 @@ class PortfolioService:
                     if "error" not in res:
                         fund_quotes[sym] = res
 
+                        # Volatilite hesaplamaları (paralel/toplu)
+                        stock_vols = MarketService.get_batch_volatility(stock_symbols) if stock_symbols else {}
+                        fund_vols = {}
+                        if fund_symbols:
+                            with ThreadPoolExecutor(max_workers=5) as executor:
+                                vol_results = list(executor.map(TefasService.get_fund_volatility, fund_symbols))
+                                for sym, vol in zip(fund_symbols, vol_results):
+                                    fund_vols[sym] = vol
+                        gold_vol = MarketService.get_historical_volatility("GC=F") if has_gold else 0.0
+
         # Altın sertifikası: portföyde kaç tane olursa olsun sadece 1 kez hesapla
         gold_quote = MarketService.get_symbol_quote("ALTIN.S1.IS") if has_gold else None
 
@@ -125,6 +135,16 @@ class PortfolioService:
             if current_price == 0.0:
                 current_price = item.avg_cost
 
+            if item.asset_type == "STOCK":
+                if item.symbol in ["ALTIN.S1.IS", "ALTIN.S1"]:
+                    volatility_percent = gold_vol
+                else:
+                    volatility_percent = stock_vols.get(item.symbol, 0.0)
+            elif item.asset_type == "FUND":
+                volatility_percent = fund_vols.get(item.symbol, 0.0)
+            else:
+                volatility_percent = 0.0
+
             fx_rate = usd_try_rate if currency == "USD" else 1.0
             value_in_try = round(current_price * item.amount * fx_rate, 2)
             cost_in_try = round(item.avg_cost * item.amount * fx_rate, 2)
@@ -146,12 +166,22 @@ class PortfolioService:
                 "value_try": value_in_try,
                 "cost_try": cost_in_try,
                 "profit_loss_try": profit_loss_try,
-                "profit_loss_percent": profit_loss_percent
+                "profit_loss_percent": profit_loss_percent,
+                "volatility_percent": volatility_percent
             })
 
         total_profit_loss_try = round(total_value_try - total_cost_try, 2)
         total_profit_loss_percent = round(((total_value_try - total_cost_try) / total_cost_try) * 100,
                                           2) if total_cost_try > 0 else 0.0
+
+        # Basitleştirilmiş portföy volatilitesi: ağırlıklı ortalama
+        # (Not: varlıklar arası korelasyonu hesaba katmaz, gerçek portföy riskinden düşük/yüksek çıkabilir)
+        portfolio_volatility = 0.0
+        if total_value_try > 0:
+            for r in result:
+                weight = r["value_try"] / total_value_try
+                portfolio_volatility += weight * r["volatility_percent"]
+        portfolio_volatility = round(portfolio_volatility, 2)
 
         return {
             "usd_try_rate": usd_try_rate,
@@ -159,6 +189,7 @@ class PortfolioService:
             "total_portfolio_cost_try": round(total_cost_try, 2),
             "total_profit_loss_try": total_profit_loss_try,
             "total_profit_loss_percent": total_profit_loss_percent,
+            "portfolio_volatility_percent": portfolio_volatility,
             "items": result
         }
 

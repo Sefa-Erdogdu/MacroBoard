@@ -76,3 +76,46 @@ class MarketService:
                         results[sym] = {"price": quote["price"], "currency": quote.get("currency", "USD")}
 
             return results
+
+    @staticmethod
+    def get_historical_volatility(symbol: str, period: str = "3mo") -> float:
+        """Tek bir sembol için yıllıklandırılmış volatilite (%) hesaplar."""
+        try:
+            hist = yf.Ticker(symbol).history(period=period)
+            closes = hist["Close"].dropna()
+            if len(closes) < 5:
+                return 0.0
+            returns = closes.pct_change().dropna()
+            annualized = returns.std() * (252 ** 0.5) * 100
+            return round(float(annualized), 2)
+        except Exception:
+            return 0.0
+
+    @staticmethod
+    def get_batch_volatility(symbols: list, period: str = "3mo") -> dict:
+        """Birden fazla hisse/ETF için yıllıklandırılmış volatiliteyi paralel (toplu) çeker."""
+        results = {}
+        if not symbols:
+            return results
+        try:
+            data = yf.download(
+                tickers=" ".join(symbols),
+                period=period,
+                group_by="ticker",
+                threads=True,
+                progress=False
+            )
+            for sym in symbols:
+                try:
+                    hist = data if len(symbols) == 1 else data[sym]
+                    closes = hist["Close"].dropna()
+                    if len(closes) < 5:
+                        continue
+                    returns = closes.pct_change().dropna()
+                    annualized = returns.std() * (252 ** 0.5) * 100
+                    results[sym] = round(float(annualized), 2)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return results

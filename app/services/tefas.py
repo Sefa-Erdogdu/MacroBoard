@@ -17,14 +17,19 @@ class TefasService:
             
             if df is None or df.empty:
                 return {"error": f"'{code}' fonu için TEFAS verisi bulunamadı."}
-            
-            # En güncel kayıt
-            latest = df.iloc[-1]
+
+            # En güncel kayıt — eğer son satırın fiyatı 0/boşsa (TEFAS o günü
+            # henüz yayınlamamışsa), geriye doğru ilk geçerli (>0) fiyatı bul
+            valid_prices = df[df['price'].astype(float) > 0]
+            if valid_prices.empty:
+                return {"error": f"'{code}' fonu için geçerli fiyat verisi bulunamadı."}
+
+            latest = valid_prices.iloc[-1]
             price = float(latest.get('price', 0))
             title = str(latest.get('title', code))
-            
+
             # Bir önceki günün fiyatı
-            prev_price = float(df.iloc[-2].get('price', price)) if len(df) > 1 else price
+            prev_price = float(valid_prices.iloc[-2].get('price', price)) if len(valid_prices) > 1 else price
             change_percent = round(((price - prev_price) / prev_price) * 100, 2) if prev_price > 0 else 0.0
 
             return {
@@ -37,3 +42,33 @@ class TefasService:
             }
         except Exception as e:
             return {"error": f"TEFAS verisi alınırken hata oluştu: {str(e)}"}
+
+    @staticmethod
+    def get_fund_volatility(fund_code: str, days: int = 90) -> float:
+        """TEFAS fonu için yıllıklandırılmış volatilite (%) hesaplar."""
+        code = fund_code.strip().upper()
+        try:
+            tefas = Crawler()
+            end_date = datetime.now().strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            df = tefas.fetch(start=start_date, end=end_date, name=code)
+
+            if df is None or df.empty or len(df) < 5:
+                return 0.0
+
+            prices = df["price"].astype(float)
+            prices = prices[prices > 0]  # Hatalı/boş (0) fiyat satırlarını at
+            if len(prices) < 5:
+                return 0.0
+
+            returns = prices.pct_change().dropna()
+            # Tek günlük %50'den büyük sıçramalar gerçek piyasa hareketinden çok
+            # veri hatasına (o günün fiyatının boş/0 gelmesine) işaret eder — at.
+            returns = returns[returns.abs() < 0.5]
+            if len(returns) < 3:
+                return 0.0
+
+            annualized = returns.std() * (252 ** 0.5) * 100
+            return round(float(annualized), 2)
+        except Exception:
+            return 0.0
