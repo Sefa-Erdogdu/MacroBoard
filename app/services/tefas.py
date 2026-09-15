@@ -1,5 +1,6 @@
 from tefas import Crawler
 from datetime import datetime, timedelta
+import pandas as pd
 
 class TefasService:
     @staticmethod
@@ -72,3 +73,23 @@ class TefasService:
             return round(float(annualized), 2)
         except Exception:
             return 0.0
+
+    @staticmethod
+    def get_fund_history(fund_code: str, days: int = 90):
+        """TEFAS fonu için geçmiş fiyat serisini (grafik için) döndürür."""
+        code = fund_code.strip().upper()
+        try:
+            tefas = Crawler()
+            end_date = datetime.now().strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            df = tefas.fetch(start=start_date, end=end_date, name=code)
+
+            if df is None or df.empty:
+                return None
+
+            df = df[df["price"].astype(float) > 0].copy()
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.sort_values("date")
+            return df[["date", "price"]]
+        except Exception:
+            return None

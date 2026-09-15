@@ -5,6 +5,7 @@ import plotly.express as px
 import yfinance as yf
 from streamlit_searchbox import st_searchbox
 import plotly.graph_objects as go
+from app.services.tefas import TefasService
 
 # API Adresi
 API_BASE_URL = "https://macroboard-api-7btq.onrender.com/api/v1"
@@ -112,7 +113,7 @@ SEMBOL_KATALOGU = {
     "PBR": "Pusula Portföy Birinci Fon",
     "PHE": "Pusula Portföy Hisse Senedi Fonu",
     "TP2": "Tera Portföy Para Piyasası Fonu",
-    "THF": "TEB Portföy Para Piyasası Fonu",
+    "THF": "Tera Portföy Hisse Senedi (TL) Fonu",
     "TMG": "İş Portföy Yabancı Hisse Senedi Fonu",
     "TLY": "TEB Portföy Yabancı Hisse Fonu",
     "EKF": "Fiba Portföy Katılım Fonu",
@@ -196,6 +197,7 @@ if st.session_state["main_nav_radio"] == SEKMELER[0]:
             if st.button("📊 Grafiği İncele", key=f"btn_m_{sym}", width="stretch"):
                 st.session_state["active_ticker"] = sym
                 st.session_state["pending_nav"] = SEKMELER[2]
+                st.session_state.pop("asset_searchbox", None)
                 st.rerun()
         col_idx += 1
 
@@ -274,11 +276,12 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
                     port_btns = st.columns(len(items))
                     for idx, item in enumerate(items):
                         sym_code = item["symbol"]
-                        if port_btns[idx].button(f"🔍 {sym_code}", key=f"btn_p_{sym_code}_{item['id']}", width="stretch"):
+                        if port_btns[idx].button(f"🔍 {sym_code}", key=f"btn_p_{sym_code}_{item['id']}",
+                                                 width="stretch"):
                             st.session_state["active_ticker"] = sym_code
                             st.session_state["pending_nav"] = SEKMELER[2]
+                            st.session_state.pop("asset_searchbox", None)
                             st.rerun()
-
                 st.divider()
 
                 st.markdown("### 🗑️ Varlık Yönetimi & Silme")
@@ -424,6 +427,25 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                     fig.update_xaxes(showgrid=True, gridcolor="#21262d")
                     fig.update_yaxes(showgrid=True, gridcolor="#21262d")
                     st.plotly_chart(fig, width="stretch")
+
+            elif asset_type == "FUND":
+                st.markdown("### 📉 Tarihsel Fiyat Performansı")
+                fund_hist = TefasService.get_fund_history(active_symbol, days=90)
+                if fund_hist is not None and not fund_hist.empty:
+                    fig_fund = px.line(
+                        fund_hist, x="date", y="price",
+                        color_discrete_sequence=["#58a6ff"]
+                    )
+                    fig_fund.update_layout(
+                        template="plotly_dark",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis_title="", yaxis_title="Fiyat (TRY)",
+                        title=f"{active_symbol} — Son 90 Gün"
+                    )
+                    st.plotly_chart(fig_fund, width="stretch")
+                else:
+                    st.info("Bu fon için geçmiş fiyat verisi alınamadı.")
 
             st.divider()
 
