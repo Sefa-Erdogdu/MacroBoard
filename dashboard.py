@@ -306,8 +306,8 @@ elif st.session_state["main_nav_radio"] == SEKMELER[1]:
 # 3. SEKME: SINIRSIZ SERBEST ARAMA ENGINE (AUTOCOMPLETE)
 # =========================================================
 elif st.session_state["main_nav_radio"] == SEKMELER[2]:
-    st.subheader("🔎 Sınırsız Canlı Varlık Arama Engine")
-    st.caption("İstediğiniz TÜM küresel hisseleri (PLAG, TTWO, AAPL, NVDA), BİST hisselerini (THYAO.IS), Kripto veya TEFAS fonlarını doğrudan yazabilirsiniz.")
+    st.subheader("🔎 Canlı Varlık Arama")
+    st.caption("İstediğiniz TÜM küresel hisseleri, BİST hisselerini, Kripto veya TEFAS fonlarını doğrudan yazabilirsiniz.")
 
     st.write("**Sembol / Varlık Adı Yazın** (yazdıkça öneriler düşer, listede yoksa da direkt sembol girip Enter'a basabilirsin):")
     selected_symbol = st_searchbox(
@@ -403,6 +403,14 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                     )
                     st.session_state["chart_display_type"] = chosen_type
 
+                    if not hist.empty:
+                        period_start_price = hist["Close"].iloc[0]
+                        period_end_price = hist["Close"].iloc[-1]
+                        period_return = round(((period_end_price - period_start_price) / period_start_price) * 100,
+                                              2) if period_start_price > 0 else 0.0
+                        return_color = "normal" if period_return >= 0 else "inverse"
+                        st.metric(f"Seçili Dönem Getirisi ({selected_period.upper()})", f"%{period_return:+.2f}")
+
                     if chosen_type == "Mum (Candlestick)":
                         fig = go.Figure(data=[go.Candlestick(
                             x=hist.index, open=hist["Open"], high=hist["High"],
@@ -430,8 +438,27 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
 
             elif asset_type == "FUND":
                 st.markdown("### 📉 Tarihsel Fiyat Performansı")
-                fund_hist = TefasService.get_fund_history(active_symbol, days=90)
+
+                fund_tf_map = {"1 Ay": 30, "3 Ay": 90, "6 Ay": 180, "1 Yıl": 365, "3 Yıl": 1095}
+                if "fund_timeframe" not in st.session_state:
+                    st.session_state["fund_timeframe"] = 90
+
+                ftf_cols = st.columns(len(fund_tf_map))
+                for idx, (label, day_val) in enumerate(fund_tf_map.items()):
+                    is_active = (day_val == st.session_state["fund_timeframe"])
+                    btn_type = "primary" if is_active else "secondary"
+                    if ftf_cols[idx].button(label, key=f"ftf_{day_val}", width="stretch", type=btn_type):
+                        st.session_state["fund_timeframe"] = day_val
+                        st.rerun()
+
+                fund_hist = TefasService.get_fund_history(active_symbol, days=st.session_state["fund_timeframe"])
+
                 if fund_hist is not None and not fund_hist.empty:
+                    fund_start_price = fund_hist["price"].iloc[0]
+                    fund_end_price = fund_hist["price"].iloc[-1]
+                    fund_return = round(((fund_end_price - fund_start_price) / fund_start_price) * 100, 2) if fund_start_price > 0 else 0.0
+                    st.metric("Seçili Dönem Getirisi", f"%{fund_return:+.2f}")
+
                     fig_fund = px.line(
                         fund_hist, x="date", y="price",
                         color_discrete_sequence=["#58a6ff"]
@@ -441,7 +468,7 @@ elif st.session_state["main_nav_radio"] == SEKMELER[2]:
                         paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         xaxis_title="", yaxis_title="Fiyat (TRY)",
-                        title=f"{active_symbol} — Son 90 Gün"
+                        title=f"{active_symbol} — Son {st.session_state['fund_timeframe']} Gün"
                     )
                     st.plotly_chart(fig_fund, width="stretch")
                 else:
